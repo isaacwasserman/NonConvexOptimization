@@ -1,0 +1,3 @@
+/Users/isaac/Desktop/CMSC_313/final/build/CMakeFiles/mesh-viewer.dir
+/Users/isaac/Desktop/CMSC_313/final/build/CMakeFiles/edit_cache.dir
+/Users/isaac/Desktop/CMSC_313/final/build/CMakeFiles/rebuild_cache.dir
