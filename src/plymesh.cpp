@@ -271,7 +271,7 @@ namespace agl {
    }
 
    GLuint* PLYMesh::getFace(int i){
-      return &_faces[i];
+      return &_faces[i*3];
    }
 
    GLfloat* PLYMesh::getVert(int i){
@@ -282,7 +282,6 @@ namespace agl {
       _positions[i*3] = x;
       _positions[i*3+1] = y;
       _positions[i*3+2] = z;
-      std::cout << i << " <= " << _nVerts << std::endl;
       if(i < _nVerts){
          setVertexData(POSITION, i, vec4(x, y, z, 1.0f));
       }

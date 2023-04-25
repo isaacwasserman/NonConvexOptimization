@@ -7,6 +7,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "agl/image.h"
 #include "agl/window.h"
@@ -22,6 +23,7 @@ float* perlin = NULL;
 float terrainRadius = 1.0f;
 float islandFloatHeight = 0.0f;
 float d = 0.02;
+std::vector<int> terrainVerts;
 
 PLYMesh island = PLYMesh("../models/island.ply");
 
@@ -38,13 +40,13 @@ float worldCoordsToTerrainHeight(float x_, float z_) {
     float x = x_ / terrainRadius;
     float z = z_ / terrainRadius;
     float y = perlin[(int)((x + 1.0f) * 128.0f) * 256 + (int)((z + 1.0f) * 128.0f)];
-    float edgeDecay = -0.5 * (length(vec2(x, z)) * length(vec2(x, z)));
+    float edgeDecay = -0.8 * (length(vec2(x, z)) * length(vec2(x, z)));
     float heightScale = 1.0f;
     return y * (heightScale + edgeDecay);
 }
 
 float worldCoordsToTerrainHeightWithFloat(float x_, float z_) {
-    return (0.1f * worldCoordsToTerrainHeight(x_, z_)) + islandFloatHeight;
+    return worldCoordsToTerrainHeight(x_, z_) + islandFloatHeight;
 }
 
 std::vector<vec3> getVertsOfNearestTerrainTri(float x_, float z_){
@@ -52,39 +54,76 @@ std::vector<vec3> getVertsOfNearestTerrainTri(float x_, float z_){
     int nearestTriIndex = -1;
     for(int triIndex = 0; triIndex < nTris; triIndex++){
         GLuint* verts = island.getFace(triIndex);
-        vec3 v0 = vec3(island.getVert(verts[0])[0],island.getVert(verts[0])[1],island.getVert(verts[0])[2]);
-        vec3 v1 = vec3(island.getVert(verts[1])[0],island.getVert(verts[1])[1],island.getVert(verts[1])[2]);
-        vec3 v2 = vec3(island.getVert(verts[2])[0],island.getVert(verts[2])[1],island.getVert(verts[2])[2]);
-        vec3 v0xz = vec3(v0.x, 0, v0.z);
-        vec3 v1xz = vec3(v1.x, 0, v1.z);
-        vec3 v2xz = vec3(v2.x, 0, v2.z);
-        vec3 p = vec3(x_, 0, z_);
-        float w0 = length(cross(v1xz - v0xz, p - v0xz)) / length(cross(v1xz - v0xz, v2xz - v0xz));
-        float w1 = length(cross(v2xz - v1xz, p - v1xz)) / length(cross(v2xz - v1xz, v0xz - v1xz));
-        float w2 = length(cross(v0xz - v2xz, p - v2xz)) / length(cross(v0xz - v2xz, v1xz - v2xz));
-        if(w0 >= 0 && w1 >= 0 && w2 >= 0){
+        bool allInTerrainVerts = true;
+        for(int k = 0; k < 3; k++){
+            bool inTerrainVerts = false;
+            for(int j = 0; j < terrainVerts.size(); j++){
+                if(verts[k] == terrainVerts[j]){
+                    inTerrainVerts = true;
+                    break;
+                }
+            }
+            if(!inTerrainVerts){
+                allInTerrainVerts = false;
+                break;
+            }
+        }
+        if(!allInTerrainVerts){
+            continue;
+        }
+        vec3 v0 = vec3(island.getVert(verts[0])[0],0.0f,island.getVert(verts[0])[2]);
+        vec3 v1 = vec3(island.getVert(verts[1])[0],0.0f,island.getVert(verts[1])[2]);
+        vec3 v2 = vec3(island.getVert(verts[2])[0],0.0f,island.getVert(verts[2])[2]);
+        
+        vec3 p = vec3(x_, 0.0f, z_);
+        vec3 v0v1 = v1 - v0;
+        vec3 v0v2 = v2 - v0;
+        vec3 v0p = p - v0;
+        float d00 = dot(v0v1, v0v1);
+        float d01 = dot(v0v1, v0v2);
+        float d11 = dot(v0v2, v0v2);
+        float d20 = dot(v0p, v0v1);
+        float d21 = dot(v0p, v0v2);
+        float denom = d00 * d11 - d01 * d01;
+        if(denom == 0.0f){
+            continue;
+        }
+        float v = (d11 * d20 - d01 * d21) / denom;
+        float w = (d00 * d21 - d01 * d20) / denom;
+        float u = 1.0f - v - w;
+        if(u >= 0 && u <= 1 && v >= 0 && v <= 1 && w >= 0 && w <= 1){
             nearestTriIndex = triIndex;
             break;
         }
     }
     if(nearestTriIndex == -1){
-        return vector<vec3>();
+        return vector<vec3>{vec3(0), vec3(0), vec3(0)};
     }
-    GLuint* verts = island.getFace(nearestTriIndex);
-    vec3 v0 = vec3(island.getVert(verts[0])[0],island.getVert(verts[0])[1],island.getVert(verts[0])[2]);
-    vec3 v1 = vec3(island.getVert(verts[1])[0],island.getVert(verts[1])[1],island.getVert(verts[1])[2]);
-    vec3 v2 = vec3(island.getVert(verts[2])[0],island.getVert(verts[2])[1],island.getVert(verts[2])[2]);
-    return vector<vec3>{v0, v1, v2};
+    else {
+        GLuint* verts = island.getFace(nearestTriIndex);
+        vec3 v0 = vec3(island.getVert(verts[0])[0],island.getVert(verts[0])[1],island.getVert(verts[0])[2]);
+        vec3 v1 = vec3(island.getVert(verts[1])[0],island.getVert(verts[1])[1],island.getVert(verts[1])[2]);
+        vec3 v2 = vec3(island.getVert(verts[2])[0],island.getVert(verts[2])[1],island.getVert(verts[2])[2]);
+        return vector<vec3>{v0, v1, v2};
+    }
 }
 
-vec3 worldCoordsToTerrainGradient(float x_, float z_){
-    float leftY = worldCoordsToTerrainHeight(x_ - d, z_);
-    float rightY = worldCoordsToTerrainHeight(x_ + d, z_);
-    float frontY = worldCoordsToTerrainHeight(x_, z_ + d);
-    float backY = worldCoordsToTerrainHeight(x_, z_ - d);
-    vec3 gradient = vec3(leftY - rightY, 2 * d, backY - frontY);
-    gradient = normalize(gradient);
-    return gradient;
+quat slerp(quat q1, quat q2, float t) {
+    float dot = glm::dot(q1, q2);
+    if(dot < 0.0f){
+        q1 = -q1;
+        dot = -dot;
+    }
+    if(dot > 0.9995f){
+        return glm::normalize(q1 + t * (q2 - q1));
+    }
+    float theta0 = acos(dot);
+    float theta = theta0 * t;
+    float sinTheta = sin(theta);
+    float sinTheta0 = sin(theta0);
+    float s0 = cos(theta) - dot * sinTheta / sinTheta0;
+    float s1 = sinTheta / sinTheta0;
+    return (s0 * q1) + (s1 * q2);
 }
 
 vec3 worldCoordsToTerrainNormal(float x_, float z_) {
@@ -101,41 +140,159 @@ vec3 worldCoordsToTerrainNormal(float x_, float z_) {
     return normal;
 }
 
+class Keyframe {
+    public:
+        Keyframe(){}
+        void set(std::string attribute, float value){
+            attributes[attribute] = value;
+        }
+        std::map<std::string, float> attributes;
+};
+
+class Animation {
+    public:
+        Animation(){}
+        void addKeyframe(Keyframe keyframe, float frameTime, float currentTime){
+            keyframes.push_back(keyframe);
+            times.push_back(frameTime);
+        }
+        float get(std::string attribute, float currentTime){
+            if(times.size() == 0){
+                return 0.0f;
+            }
+            if(times.size() == 1){
+                return keyframes[0].attributes[attribute];
+            }
+            Keyframe f1, f2;
+            float t1 = -1;
+            float t2 = -1;
+            for(int i = 0; i < times.size() - 1; i++){
+                if(times[i] <= currentTime && times[i + 1] >= currentTime){
+                    f1 = keyframes[i];
+                    f2 = keyframes[i + 1];
+                    t1 = times[i];
+                    t2 = times[i + 1];
+                    break;
+                }
+            }
+            if(t1 == -1){
+                return keyframes[keyframes.size() - 1].attributes[attribute];
+            }
+            float t;
+            if(t1 > t2){
+                t = 1.0f;
+            }
+            else {
+                t = (currentTime - t1) / (t2 - t1);
+            }
+            float value = f1.attributes[attribute] * (1 - t) + f2.attributes[attribute] * t;
+            return value;
+        }
+        std::vector<float> times;
+        std::vector<Keyframe> keyframes;
+};
+
 class Sheep {
     public:
         Sheep() {
-            coords = vec3(0.1, 0.1, 0);
+            int startVertIndex = rand() % terrainVerts.size();
+            GLfloat* start_coords = island.getVert(startVertIndex);
+            coords = vec3(start_coords[0], 0, start_coords[2]);
+            Keyframe init;
+            init.set("x", coords.x);
+            init.set("z", coords.z);
+            animation.addKeyframe(init, 0, 0);
+            jumpStagger = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
             rotation = identity<mat3>();
         }
-        void jump() {
-            midJump = true;
+        void jump(float dt, float elapsedTime) {
+            hasJumped = true;
+            lastJumpTime = elapsedTime;
+            startPoint = coords;
+            goal = coords + (gradient * (0.1f * vec3(1, 0, 1)));
+            goal.y = worldCoordsToTerrainHeightWithFloat(goal.x, goal.z);
+            std::vector<vec3> verts = getVertsOfNearestTerrainTri(goal.x, goal.z);
+            if(verts[0] == vec3(0) && verts[1] == vec3(0) && verts[2] == vec3(0) && !isDead){
+                isDead = true;
+                goal.y = -10;
+            }
+            Keyframe start;
+            start.set("x", coords.x);
+            start.set("z", coords.z);
+            animation.addKeyframe(start, elapsedTime, elapsedTime);
+            Keyframe end;
+            end.set("x", goal.x);
+            end.set("z", goal.z);
+            animation.addKeyframe(end, elapsedTime + jumpTime, elapsedTime);
+        }
+        mat3 rotationForPosition(float x_, float z_){
+            normal = worldCoordsToTerrainNormal(x_, z_);
+            gradient = vec3(0, 1, 0);
+            right = normalize(cross(normal, gradient));
+            gradient = normalize(cross(normal, right));
+            if(abs(right.y) > abs(gradient.y)){
+                vec3 temp = right;
+                right = gradient;
+                gradient = temp;
+            }
+            if(gradient.y > 0){
+                gradient = -gradient;
+            }
+            right = normalize(cross(normal, gradient));
+            rotation = mat3(normalize(right), normalize(normal), normalize(gradient));
+            return rotation;
+        }
+        bool isJumping(float elapsedTime){
+            return hasJumped && (elapsedTime - lastJumpTime < jumpTime) && !isDead;
+        }
+        bool isFalling(){
+            return isDead && goal.y <= -10;
         }
         void update(float dt, float elapsedTime){
+            if(elapsedTime - lastJumpTime > timeBetweenJumps && elapsedTime > timeBetweenJumps + jumpStagger){
+                lastJumpTime = elapsedTime;
+                jump(dt, elapsedTime);
+            }
+            coords.x = animation.get("x", elapsedTime);
+            coords.z = animation.get("z", elapsedTime);
             coords.y = worldCoordsToTerrainHeightWithFloat(coords.x, coords.z);
-            // set the rotation of the sheep to be parallel to the terrain
-            gradient = worldCoordsToTerrainGradient(coords.x, coords.z);
-            normal = worldCoordsToTerrainNormal(coords.x, coords.z);
-            right = normalize(cross(normal, gradient));
-            rotation = mat3(right, normal, gradient);
-            if(midJump){
-                velocity += acceleration * dt;
-                coords += velocity * dt;
-                if(coords.y < worldCoordsToTerrainHeightWithFloat(coords.x, coords.z)){
-                    coords.y = worldCoordsToTerrainHeightWithFloat(coords.x, coords.z);
-                    midJump = false;
-                }
+            float t = (elapsedTime - lastJumpTime);
+            if(isJumping(elapsedTime) && t > 0){
+                float yOffset = -t * (t - jumpTime) * (jumpHeight / jumpTime);
+                coords.y += yOffset;
+                quat startRotation = quat(rotationForPosition(startPoint.x, startPoint.z));
+                quat goalRotation = quat(rotationForPosition(goal.x, goal.z));
+                quat interpolatedRotation = slerp(startRotation, goalRotation, t / jumpTime);
+                rotation = mat3(interpolatedRotation);
+            }
+            else if(isFalling()){
+                float yOffset = -t * (t - jumpTime) * (jumpHeight / jumpTime);
+                coords.y += yOffset;
+            }
+            else {
+                rotation = rotationForPosition(coords.x, coords.z);
             }
         }
-        vec3 coords;
+
         vec3 normal;
         vec3 gradient;
         vec3 right;
+
+        vec3 coords;
         mat3 rotation;
 
-        bool midJump = false;
-        vec3 goalCoords;
-        vec3 acceleration = vec3(0, -9.8, 0);
-        vec3 velocity = vec3(0);
+        vec3 startPoint;
+        vec3 goal;
+
+        Animation animation;
+        bool hasJumped = false;
+        float lastJumpTime = 0.0f;
+        float jumpTime = 0.5f;
+        float jumpHeight = 0.5f;
+        float timeBetweenJumps = 2.0f;
+        float jumpStagger = 0.0f;
+
+        bool isDead = false;
 };
 
 class MeshViewer : public Window {
@@ -153,12 +310,12 @@ class MeshViewer : public Window {
     }
 
     void setup() {
-        // island = PLYMesh("../models/island.ply");
         sheepMesh = PLYMesh("../models/sheep.ply");
+        barnMesh = PLYMesh("../models/barn.ply");
         refreshShaders();
         renderer.loadRenderTexture("view", 0, width() * MSAA, height() * MSAA);
         setupTerrain();
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < 10; i++) {
             Sheep s = Sheep();
             sheep.push_back(s);
         }
@@ -355,10 +512,7 @@ class MeshViewer : public Window {
         renderer.endShader();
     }
 
-    void drawScene() {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        drawSky();
-        drawIsland();
+    void drawSheep(){
         renderer.beginShader("sheep");
         configureLights();
         renderer.setUniform("ambientCoefficient", 0.9f);
@@ -368,31 +522,36 @@ class MeshViewer : public Window {
         for(int i = 0; i < sheep.size(); i++) {
             sheep[i].update(dt(), elapsedTime());
             renderer.push();
-            renderer.translate(sheep[i].coords);
-            renderer.rotate(sheep[i].rotation);
-            renderer.mesh(sheepMesh);
-            renderer.scale(vec3(0.05));
-            renderer.plane();
+                renderer.translate(sheep[i].coords);
+                renderer.rotate(sheep[i].rotation);
+                renderer.scale(vec3(2.0f));
+                renderer.mesh(sheepMesh);
             renderer.pop();
         }
         renderer.endShader();
-        renderer.beginShader("lines");
-        renderer.setUniform("color", vec3(0.9, 0.95, 1));
+    }
+
+    void drawBarn(){
+        renderer.beginShader("sheep");
+        configureLights();
+        renderer.setUniform("ambientCoefficient", 0.9f);
+        renderer.setUniform("diffuseCoefficient", 0.4f);
+        renderer.setUniform("specularCoefficient", 0.0f);
+        renderer.setUniform("shininess", 1.0f);
         renderer.push();
-        renderer.line(sheep[0].coords, sheep[0].coords + sheep[0].normal, vec3(1,0,0), vec3(1,0,0));
-        renderer.line(sheep[0].coords, sheep[0].coords + sheep[0].gradient, vec3(0,1,0), vec3(0,1,0));
-        renderer.line(sheep[0].coords, sheep[0].coords + sheep[0].right, vec3(0,0,1), vec3(0,0,1));
-        renderer.line(sheep[0].coords, sheep[0].coords + u, vec3(1,0,1), vec3(1,0,1));
-        renderer.line(sheep[0].coords, sheep[0].coords + v, vec3(1,1,0), vec3(1,1,0));
-        renderer.endShader();
-        renderer.beginShader("unlit");
-        renderer.setUniform("color", vec3(1, 0, 0));
-        renderer.push();
-        renderer.translate(a);
-        renderer.scale(vec3(0.01));
-        renderer.sphere();
+            renderer.translate(vec3(0.5));
+            renderer.scale(vec3(1.0f));
+            renderer.mesh(barnMesh);
         renderer.pop();
-        
+        renderer.endShader();
+    }
+
+    void drawScene() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        drawSky();
+        drawIsland();
+        drawSheep();
+        drawBarn();
     }
 
     void draw() {
@@ -435,9 +594,11 @@ class MeshViewer : public Window {
         vec3(0.8, 0.8, 0.8),
         vec3(0.8, 0.8, 0.8),
     };
-    std::vector<int> terrainVerts;
     std::vector<Sheep> sheep;
     agl::PLYMesh sheepMesh;
+    agl::PLYMesh barnMesh;
+    int numDeadSheep = 0;
+    int numHerdedSheep = 0;
 };
 
 int main(int argc, char** argv) {
