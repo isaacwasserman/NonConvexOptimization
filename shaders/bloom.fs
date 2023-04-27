@@ -11,7 +11,9 @@ void main()
 {   
     FragColor = texture(view, uv);
     if(length(FragColor.xyz) == 0){
-        FragColor = vec4(0.9, 0.95, 1, 1);
+        vec3 skycolor = vec3(0.9, 0.95, 1);
+        skycolor += vec3(0.1, 0.05, 0) * (uv.y * 1 - 1);
+        FragColor = vec4(skycolor, 1);
     }
     
     // float two_Pi = 6.28318530718;

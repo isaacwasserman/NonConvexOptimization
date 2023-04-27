@@ -350,7 +350,6 @@ class MeshViewer : public Window {
             start_coords = island.getVert(startVertIndex);
         }
         barnSpawn = vec3(start_coords[0], 0, start_coords[2]);
-        perlinZ *= 5.0f * (rand() / static_cast <float> (RAND_MAX));
     }
 
     void setup() {
@@ -580,7 +579,12 @@ class MeshViewer : public Window {
                     sheep[i].capture();
                     numHerdedSheep++;
                 }
+                bool wasDead = sheep[i].isDead;
                 sheep[i].update(dt(), elapsedTime());
+                bool isDead = sheep[i].isDead;
+                if(!wasDead && isDead){
+                    numDeadSheep++;
+                }
                 renderer.push();
                     renderer.translate(sheep[i].coords);
                     renderer.rotate(sheep[i].rotation);
@@ -628,7 +632,7 @@ class MeshViewer : public Window {
             renderer.push();
                 renderer.fontColor(vec4(0.1, 0.1, 0.1, 1));
                 renderer.fontSize(50.0f);
-                renderer.text("Sheep Herded: " + to_string(numHerdedSheep), 50.0f, 80.0f);
+                renderer.text("Sheep Herded: " + to_string(numHerdedSheep) + "                         Sheep Lost: " + to_string(numDeadSheep), 50.0f, 80.0f);
             renderer.pop();
         renderer.endShader();
         drawIsland();

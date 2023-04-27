@@ -1,8 +1,6 @@
-# mesh-viewer
+# Non-Convex Optimization: The Game
 
-Implements a simple PLY viewer
-
-![](readme_assets/pearl.gif)
+![](readme_assets/screenshot.png)
 
 ## How to build
 
@@ -17,11 +15,7 @@ mesh-viewer/build $ cmake ..
 mesh-viewer/build $ start mesh-viewer.sln
 ```
 
-Your solution file should contain two projects: `mesh-viewer` and `test-ply-mesh`.
-To run from the git bash command shell, 
-
 ```
-mesh-viewer/build $ ../bin/Debug/test-ply-mesh.exe
 mesh-viewer/build $ ../bin/Debug/mesh-viewer.exe
 ```
 
@@ -42,30 +36,29 @@ To run each program from build, you would type
 mesh-viewer/build $ ../bin/mesh-viewer
 ```
 
-## Demo of basic features
+## How to Play
+The goal is to herd as many sheep as you can into the barn. Sheep only move downhill.
+Use the `<` and `>` keys (AKA `,` and `.`) to deform the terrain so that "downhill" happens to be in the direction of the barn. Don't let the sheep fall off the edge of the island.
 
-- Models can be swapped using the N key to go to the next model or the P key to go to the previous model.
+When all sheep are lost/herded, press `r` to reset the scene.
 
-![](readme_assets/model_swap.gif)
+## How it Works
+### Terrain
+The terrain is generated using 3D Perlin noise from the FastNoise library. When you deform the terrain using the `<` and `>` keys, you are simply changing which cross-section of the noise is sampled for the terrain heightmap.
 
-- Shaders can be swapped using the S key. The shaders are as follows:
-    - Pearl (Phong pixel shader with pearlescent reflections with dynamic light position)
-    - Breathe (Phong pixel shader with vertices that animate away from normals)
-    - Unlit
-    - Normals
-    - Phong Vertex
-    - Phong Pixel
+### Sheep Behavior and Animation
+Sheep decide where to move based on the gradient of the terrain at their current location. The gradient is calculated based on the terrain surface normal.
 
-![](readme_assets/shader_swap.gif)
+Sheep are animated using a custom `Animation` class which contains a series of keyframes which are added each time the sheep needs to move.
 
-## Unique features 
+During their jumps downhill, their rotation animates to match the normal of their new location. This part of the animation is performed using spherical linear interpolation.
 
-### Pearl Shader
-The pearl shader uses the Phong pixel shader as a base and adds a component to the diffuse lighting which adds color based on the `r` vector to simulate pearlescent materials. The light source is also animated to show off these reflection effects.
+### Camera
+The camera controls are based on the orbit camera from the mesh-viewer assignment. However, the camera is now orthographic, rather than perspective. 
 
-![](readme_assets/pearl.gif)
+### Shading
+The scene has three lights to provide more uniform illumination. The diffuse and specular components of each object's shading are calculated based on the sum of light received from these three sources.
 
-### Breathe
-The breathe shader uses the Phong pixel shader as a base and animates the `gl_position` vector in the vertex shader to move each vertex in the direction of its normal. This makes the mesh appear to "breathe".
+All elements are shaded using their surface normals, so that their polygons are more visible. This is done to make it easier to predict the direction that the sheep will walk.
 
-![](readme_assets/breathe.gif)
+Instead of using texture maps or vertex colors, all multicolor objects (island and barn) are shaded procedurally using a series of conditionals based on normals and position.
