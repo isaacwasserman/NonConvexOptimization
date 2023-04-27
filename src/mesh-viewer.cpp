@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <chrono>
+#include <ctime>
 
 #include "agl/image.h"
 #include "agl/window.h"
@@ -18,6 +20,9 @@
 using namespace std;
 using namespace glm;
 using namespace agl;
+
+// set seed to current time in seconds
+unsigned int seed = (unsigned int)std::chrono::system_clock::now().time_since_epoch().count();
 
 float* perlin = NULL;
 float terrainRadius = 1.0f;
@@ -39,7 +44,8 @@ float worldCoordsToTerrainHeight(float x_, float z_) {
     }
     float x = x_ / terrainRadius;
     float z = z_ / terrainRadius;
-    float y = perlin[(int)((x + 1.0f) * 128.0f) * 256 + (int)((z + 1.0f) * 128.0f)];
+    int ind = std::min(255*255, abs((int)((x + 1.0f) * 128.0f) * 256 + (int)((z + 1.0f) * 128.0f)));
+    float y = perlin[ind];
     float edgeDecay = -0.8 * (length(vec2(x, z)) * length(vec2(x, z)));
     float heightScale = 1.0f;
     return y * (heightScale + edgeDecay);
@@ -140,6 +146,19 @@ vec3 worldCoordsToTerrainNormal(float x_, float z_) {
     return normal;
 }
 
+vec3 findPeak(){
+    float max = 0.0f;
+    vec3 peak = vec3(0.0f, 0.0f, 0.0f);
+    for(int i = 0; i < terrainVerts.size(); i++){
+        vec3 v = vec3(island.getVert(terrainVerts[i])[0], island.getVert(terrainVerts[i])[1], island.getVert(terrainVerts[i])[2]);
+        if(v.y > max){
+            max = v.y;
+            peak = v;
+        }
+    }
+    return peak;
+}
+
 class Keyframe {
     public:
         Keyframe(){}
@@ -195,8 +214,13 @@ class Animation {
 class Sheep {
     public:
         Sheep() {
-            int startVertIndex = rand() % terrainVerts.size();
-            GLfloat* start_coords = island.getVert(startVertIndex);
+            GLfloat far[3] = {-99.0f, -99.0f, -99.0f};
+            int startVertIndex = -1;
+            GLfloat* start_coords = far;
+            while(length(vec3(start_coords[0], start_coords[1], start_coords[2])) > 0.8f){
+                startVertIndex = (rand() * seed) % terrainVerts.size();
+                start_coords = island.getVert(startVertIndex);
+            }
             coords = vec3(start_coords[0], 0, start_coords[2]);
             Keyframe init;
             init.set("x", coords.x);
@@ -248,6 +272,10 @@ class Sheep {
         bool isFalling(){
             return isDead && goal.y <= -10;
         }
+        void capture(){
+            isCaptured = true;
+            shouldDraw = false;
+        }
         void update(float dt, float elapsedTime){
             if(elapsedTime - lastJumpTime > timeBetweenJumps && elapsedTime > timeBetweenJumps + jumpStagger){
                 lastJumpTime = elapsedTime;
@@ -293,6 +321,8 @@ class Sheep {
         float jumpStagger = 0.0f;
 
         bool isDead = false;
+        bool isCaptured = false;
+        bool shouldDraw = true;
 };
 
 class MeshViewer : public Window {
@@ -300,25 +330,36 @@ class MeshViewer : public Window {
     MeshViewer() : Window() {}
 
     void refreshShaders() {
-        renderer.loadShader("bloom", "../shaders/bloom.vs",
-                            "../shaders/bloom.fs");
-        renderer.loadShader("island", "../shaders/island.vs",
-                            "../shaders/island.fs");
-        renderer.loadShader("sheep", "../shaders/sheep.vs",
-                            "../shaders/sheep.fs");    
-        renderer.loadShader("sky", "../shaders/sky.vs", "../shaders/sky.fs");
+        std::vector<string> shaderNames = {"bloom", "island", "sheep", "sky", "barn", "text"};
+        for(string name : shaderNames){
+            renderer.loadShader(name, "../shaders/" + name + ".vs", "../shaders/" + name + ".fs");
+        }
     }
 
-    void setup() {
-        sheepMesh = PLYMesh("../models/sheep.ply");
-        barnMesh = PLYMesh("../models/barn.ply");
-        refreshShaders();
-        renderer.loadRenderTexture("view", 0, width() * MSAA, height() * MSAA);
-        setupTerrain();
+    void reset(){
+        sheep.clear();
         for (int i = 0; i < 10; i++) {
             Sheep s = Sheep();
             sheep.push_back(s);
         }
+        GLfloat far[3] = {-99.0f, -99.0f, -99.0f};
+        int startVertIndex = -1;
+        GLfloat* start_coords = far;
+        while(length(vec3(start_coords[0], start_coords[1], start_coords[2])) > 0.5f){
+            startVertIndex = (rand() * seed) % terrainVerts.size();
+            start_coords = island.getVert(startVertIndex);
+        }
+        barnSpawn = vec3(start_coords[0], 0, start_coords[2]);
+        perlinZ *= 5.0f * (rand() / static_cast <float> (RAND_MAX));
+    }
+
+    void setup() {
+        sheepMesh = PLYMesh("../models/sheep.ply");
+        barnMesh = PLYMesh("../models/barn_blend.ply");
+        refreshShaders();
+        renderer.loadRenderTexture("view", 5, width() * MSAA, height() * MSAA);
+        setupTerrain();
+        reset();
     }
 
     void mouseMotion(int x, int y, int dx, int dy) {
@@ -384,6 +425,9 @@ class MeshViewer : public Window {
         }
         if (key == GLFW_KEY_PERIOD) {
             perioddown = false;
+        }
+        if (key == GLFW_KEY_R) {
+            reset();
         }
     }
 
@@ -497,19 +541,30 @@ class MeshViewer : public Window {
     void drawPostProcessedView() {
         renderer.ortho(-viewWidth, viewWidth, (-viewWidth + orthoOffset.y), (viewWidth + orthoOffset.y), -10, 500);
         renderer.beginShader("bloom");
-        renderer.setUniform("resolution", vec2(width(), height()));
-        renderer.texture("view", "view");
-        renderer.push();
-        renderer.rotate(atan2(eyePos.x, eyePos.z), vec3(0, 1, 0));
-        renderer.rotate(-1.0f * atan2(eyePos.y, sqrt(eyePos.x * eyePos.x +
-                                                     eyePos.z * eyePos.z)),
-                        vec3(1, 0, 0));
-        renderer.translate(vec3(0, orthoOffset.y, 0));
-        float scale = 2 * viewWidth;
-        renderer.scale(vec3(scale));
-        renderer.cube();
-        renderer.pop();
+            renderer.setUniform("resolution", vec2(width(), height()));
+            renderer.texture("view", "view");
+            renderer.push();
+                renderer.rotate(atan2(eyePos.x, eyePos.z), vec3(0, 1, 0));
+                renderer.rotate(-1.0f * atan2(eyePos.y, sqrt(eyePos.x * eyePos.x +
+                                                            eyePos.z * eyePos.z)),
+                                vec3(1, 0, 0));
+                renderer.translate(vec3(0, orthoOffset.y, 0));
+                float scale = 2 * viewWidth;
+                renderer.scale(vec3(scale));
+                renderer.cube();
+            renderer.pop();
         renderer.endShader();
+        
+    }
+
+    bool intersectsBarn(vec3 pos) {
+        float x = pos.x;
+        float z = pos.z;
+        float barnX = barnSpawn.x;
+        float barnZ = barnSpawn.z;
+        float barnRadius = 0.15f;
+        float dist = length(vec2(x,z) - vec2(barnX, barnZ));
+        return dist < barnRadius;
     }
 
     void drawSheep(){
@@ -520,27 +575,48 @@ class MeshViewer : public Window {
         renderer.setUniform("specularCoefficient", 0.0f);
         renderer.setUniform("shininess", 1.0f);
         for(int i = 0; i < sheep.size(); i++) {
-            sheep[i].update(dt(), elapsedTime());
-            renderer.push();
-                renderer.translate(sheep[i].coords);
-                renderer.rotate(sheep[i].rotation);
-                renderer.scale(vec3(2.0f));
-                renderer.mesh(sheepMesh);
-            renderer.pop();
+            if(sheep[i].shouldDraw){
+                if(intersectsBarn(sheep[i].coords) && !sheep[i].isCaptured){
+                    sheep[i].capture();
+                    numHerdedSheep++;
+                }
+                sheep[i].update(dt(), elapsedTime());
+                renderer.push();
+                    renderer.translate(sheep[i].coords);
+                    renderer.rotate(sheep[i].rotation);
+                    renderer.scale(vec3(2.0f));
+                    renderer.mesh(sheepMesh);
+                renderer.pop();
+            }
         }
         renderer.endShader();
     }
 
     void drawBarn(){
-        renderer.beginShader("sheep");
+        vec3 normal = worldCoordsToTerrainNormal(barnSpawn.x, barnSpawn.z);
+        vec3 gradient = vec3(0, 1, 0);
+        vec3 right = normalize(cross(normal, gradient));
+        gradient = normalize(cross(normal, right));
+        if(abs(right.y) > abs(gradient.y)){
+            vec3 temp = right;
+            right = gradient;
+            gradient = temp;
+        }
+        if(gradient.y > 0){
+            gradient = -gradient;
+        }
+        right = normalize(cross(normal, gradient));
+        mat3 rotation = mat3(normalize(right), normalize(normal), normalize(gradient));
+        renderer.beginShader("barn");
         configureLights();
         renderer.setUniform("ambientCoefficient", 0.9f);
         renderer.setUniform("diffuseCoefficient", 0.4f);
         renderer.setUniform("specularCoefficient", 0.0f);
         renderer.setUniform("shininess", 1.0f);
         renderer.push();
-            renderer.translate(vec3(0.5));
-            renderer.scale(vec3(1.0f));
+            renderer.translate(barnSpawn + vec3(0, worldCoordsToTerrainHeightWithFloat(barnSpawn.x, barnSpawn.z),0));
+            renderer.rotate(rotation);
+            renderer.scale(vec3(0.1f));
             renderer.mesh(barnMesh);
         renderer.pop();
         renderer.endShader();
@@ -548,10 +624,17 @@ class MeshViewer : public Window {
 
     void drawScene() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        drawSky();
+        renderer.beginShader("text");
+            renderer.push();
+                renderer.fontColor(vec4(0.1, 0.1, 0.1, 1));
+                renderer.fontSize(50.0f);
+                renderer.text("Sheep Herded: " + to_string(numHerdedSheep), 50.0f, 80.0f);
+            renderer.pop();
+        renderer.endShader();
         drawIsland();
         drawSheep();
         drawBarn();
+        
     }
 
     void draw() {
@@ -599,6 +682,7 @@ class MeshViewer : public Window {
     agl::PLYMesh barnMesh;
     int numDeadSheep = 0;
     int numHerdedSheep = 0;
+    vec3 barnSpawn = vec3(0, 0, 0);
 };
 
 int main(int argc, char** argv) {

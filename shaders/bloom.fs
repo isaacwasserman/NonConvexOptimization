@@ -9,8 +9,10 @@ out vec4 FragColor;
 
 void main()
 {   
-    float bloom_threshold = 1.8;
     FragColor = texture(view, uv);
+    if(length(FragColor.xyz) == 0){
+        FragColor = vec4(0.9, 0.95, 1, 1);
+    }
     
     // float two_Pi = 6.28318530718;
     // float blur_directions = 16.0;
