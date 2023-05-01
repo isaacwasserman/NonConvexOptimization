@@ -691,8 +691,13 @@ class MeshViewer : public Window {
     vec3 barnSpawn = vec3(0, 0, 0);
 };
 
+void freePerlin() {
+    delete[] perlin;
+}
+
 int main(int argc, char** argv) {
     MeshViewer viewer;
+    atexit(freePerlin);
     viewer.run();
     return 0;
 }
