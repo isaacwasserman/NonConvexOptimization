@@ -4,7 +4,7 @@
 
 # Screen Recording
 
-<video src="readme_assets/recording.mov"></video>
+![](readme_assets/recording.mov)
 
 ## How to build
 
