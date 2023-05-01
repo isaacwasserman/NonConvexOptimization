@@ -362,6 +362,7 @@ class MeshViewer : public Window {
         renderer.loadRenderTexture("view", 5, width() * MSAA, height() * MSAA);
         setupTerrain();
         reset();
+        reset();
     }
 
     void mouseMotion(int x, int y, int dx, int dy) {
