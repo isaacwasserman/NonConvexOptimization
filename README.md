@@ -3,6 +3,7 @@
 ![](readme_assets/screenshot.png)
 
 # Screen Recording
+
 [![Screen Recording](readme_assets/screenshot.png)](readme_assets/recording.mp4)
 
 ## How to build
