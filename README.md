@@ -4,7 +4,7 @@
 
 # Screen Recording
 
-[![Screen Recording](readme_assets/screenshot.png)](readme_assets/recording.mp4)
+https://user-images.githubusercontent.com/1498116/235521252-037b1969-e4a1-478f-bf75-552f4488518c.mp4
 
 ## How to build
 
