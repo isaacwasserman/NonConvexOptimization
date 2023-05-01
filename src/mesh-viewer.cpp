@@ -22,7 +22,8 @@ using namespace glm;
 using namespace agl;
 
 // set seed to current time in seconds
-unsigned int seed = (unsigned int)std::chrono::system_clock::now().time_since_epoch().count();
+// unsigned int seed = (unsigned int)std::chrono::system_clock::now().time_since_epoch().count();
+unsigned int seed = 2548309051;
 
 float* perlin = NULL;
 float terrainRadius = 1.0f;
@@ -46,6 +47,7 @@ float worldCoordsToTerrainHeight(float x_, float z_) {
     float z = z_ / terrainRadius;
     int ind = std::min(255*255, abs((int)((x + 1.0f) * 128.0f) * 256 + (int)((z + 1.0f) * 128.0f)));
     float y = perlin[ind];
+    // std::cout << "y: " << y << std::endl;
     float edgeDecay = -0.8 * (length(vec2(x, z)) * length(vec2(x, z)));
     float heightScale = 1.0f;
     return y * (heightScale + edgeDecay);
@@ -284,6 +286,7 @@ class Sheep {
             coords.x = animation.get("x", elapsedTime);
             coords.z = animation.get("z", elapsedTime);
             coords.y = worldCoordsToTerrainHeightWithFloat(coords.x, coords.z);
+            // std::cout << "coords: " << coords.x << ", " << coords.y << ", " << coords.z << std::endl;
             float t = (elapsedTime - lastJumpTime);
             if(isJumping(elapsedTime) && t > 0){
                 float yOffset = -t * (t - jumpTime) * (jumpHeight / jumpTime);
@@ -505,7 +508,6 @@ class MeshViewer : public Window {
             vec3 vert = vec3(v[0], v[1], v[2]);
             island.setVert(terrainVerts[i], vert.x, worldCoordsToTerrainHeight(vert.x, vert.z), vert.z);
         }
-        delete[] perlin;
         
         island.computeNormals();
     }

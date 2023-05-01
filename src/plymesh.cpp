@@ -268,6 +268,11 @@ namespace agl {
          _normals[i3*3+1] = n.y;
          _normals[i3*3+2] = n.z;
       }
+      for(int i = 0; i < _normals.size(); i++){
+         if(isnan(_normals[i])){
+            std::cout << "NAN" << std::endl;
+         }
+      }
    }
 
    GLuint* PLYMesh::getFace(int i){

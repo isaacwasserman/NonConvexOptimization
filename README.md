@@ -2,6 +2,10 @@
 
 ![](readme_assets/screenshot.png)
 
+# Screen Recording
+
+<video src="readme_assets/recording.mov"></video>
+
 ## How to build
 
 *Windows*
